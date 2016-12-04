@@ -5,6 +5,7 @@ import java.awt.Robot;
 import java.awt.event.KeyEvent;
 import static java.awt.event.KeyEvent.*;
 
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.ArrayList;
 
@@ -21,14 +22,18 @@ public class QwopRunner extends Automato {
 		QwopRunner forest = new QwopRunner();
 
 		forest.driver.manage().window().setSize(new Dimension(1024, 720));
-		forest.run();
+		try{
+			forest.run();
+		} catch (AWTException e){
+			e.printStackTrace();
+		}
 	}
 
 	public QwopRunner() {
 		super("https://www.foddy.net/athletics.swf", "chrome");
 	}
 	
-	public void run() {
+	public void run() throws AWTException{
 
 		refresh(); // game doesn't load first time ?
 
@@ -51,42 +56,40 @@ public class QwopRunner extends Automato {
 
 		controls.add("r");
 
-		File screenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
-		try{
-			FileUtils.copyFile(screenshot, new File("./screenshot.png"));
-            ImageParser.getDistanceSubImage(ImageParser.getBufferedImage(screenshot));
-		} catch (Exception e){
-			e.printStackTrace();
-		}
-
 		int i = 0;
-
-		while (true) {
-			try{
-                milliSleep(10);
-				executeControl(controls.get(i), 10); // a bit shaky.....
-			} catch (AWTException e){
-				System.out.println("AWT EXCEPT");
-			} finally {
-				i++;
-				i %= 4;
-			}
-		}
-	}
-
-	private void executeControl(String controls, Integer duration) throws AWTException {
-		char [] keys = controls.toCharArray();
 
 		Robot robot = new Robot();
 
-		for (char key : keys){
-			robot.keyPress(getKeyEvent(key));
-		}
-		milliSleep(duration);
-		for (char key : keys){
-			robot.keyRelease(getKeyEvent(key));
+		while (i < 1) {
+			char[] keys = controls.get(i % 8).toCharArray();
+
+			long millis = System.currentTimeMillis();
+
+			for (char key : keys){
+				robot.keyPress(getKeyEvent(key));
+			}
+
+			File screenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
+			try{
+				FileUtils.copyFile(screenshot, new File("./screenshot.png"));
+				ImageParser.getDistanceSubImage(ImageParser.getBufferedImage(screenshot));
+				BufferedImage distance_read = ImageParser.getBufferedImage(new File("clipped.png"));
+
+				ImageParser.readDistance(distance_read, ImageParser.findMReference(distance_read));
+
+			} catch (Exception e){
+				e.printStackTrace();
+			}
+
+			while (System.currentTimeMillis() < millis + 100){}
+
+			for (char key : keys){
+				robot.keyRelease(getKeyEvent(key));
+			}
+			i++;
 		}
 
+		quitDriver();
 	}
 
 	private int getKeyEvent(char key){
@@ -98,7 +101,5 @@ public class QwopRunner extends Automato {
 			case 'r': return(VK_P);
 			default: return(VK_F); // does nothing for game
 		}
-
-
 	}
 }
