@@ -17,7 +17,9 @@ import org.openqa.selenium.interactions.Actions;
 import selenium.utils.Automato;
 
 public class QwopRunner extends Automato {
-	
+
+	QLearning brain = new QLearning();
+
 	public static void main(String[] args) {
 		QwopRunner forest = new QwopRunner();
 
@@ -41,7 +43,7 @@ public class QwopRunner extends Automato {
 
 		WebElement game = getWebElement("id=plugin"); // get the game frame
 
-		game.click();
+		game.click(); //init game, get focus
 
 		ArrayList<String> controls = new ArrayList<String>();
 		controls.add("q");
@@ -57,13 +59,16 @@ public class QwopRunner extends Automato {
 		controls.add("r");
 
 		int i = 0;
+		int failures = 0;
+		double last_distance = 0;
 
 		Robot robot = new Robot();
 
-		while (i < 1) {
-			char[] keys = controls.get(i % 8).toCharArray();
-
-			long millis = System.currentTimeMillis();
+		while (failures < 10) {
+			String decision = brain.getDecision(last_distance);
+			//System.out.println(decision);
+			//char[] keys = decision.toCharArray();
+			char[] keys = controls.get(i).toCharArray();
 
 			for (char key : keys){
 				robot.keyPress(getKeyEvent(key));
@@ -71,24 +76,36 @@ public class QwopRunner extends Automato {
 
 			File screenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
 			try{
-				FileUtils.copyFile(screenshot, new File("./screenshot.png"));
-				ImageParser.getDistanceSubImage(ImageParser.getBufferedImage(screenshot));
+				FileUtils.copyFile(screenshot, new File("screenshot.png"));
+				BufferedImage game_img = ImageParser.getBufferedImage(screenshot);
+				ImageParser.getDistanceSubImage(game_img);
 				BufferedImage distance_read = ImageParser.getBufferedImage(new File("clipped.png"));
 
-				ImageParser.readDistance(distance_read, ImageParser.findMReference(distance_read));
+				double new_distance = ImageParser.readDistance(distance_read, ImageParser.findMReference(distance_read));
+
+				//brain.recordOutcome(last_distance, last_distance-new_distance, decision);
+
+				last_distance = new_distance;
+
+				for (char key : keys){
+					robot.keyRelease(getKeyEvent(key));
+				}
+
+				if(ImageParser.gameOver(game_img)){ //restart
+					System.out.println("GAME OVER");
+					sendKeys(game, "r");
+					milliSleep(50);
+					failures++;
+				}
 
 			} catch (Exception e){
 				e.printStackTrace();
 			}
 
-			while (System.currentTimeMillis() < millis + 100){}
-
-			for (char key : keys){
-				robot.keyRelease(getKeyEvent(key));
-			}
 			i++;
+			i %= 8;
 		}
-
+		brain.saveMatrixFile();
 		quitDriver();
 	}
 
@@ -98,7 +115,7 @@ public class QwopRunner extends Automato {
 			case 'w': return(VK_W);
 			case 'o': return(VK_O);
 			case 'p': return(VK_P);
-			case 'r': return(VK_P);
+			case 'r': return(VK_R);
 			default: return(VK_F); // does nothing for game
 		}
 	}
